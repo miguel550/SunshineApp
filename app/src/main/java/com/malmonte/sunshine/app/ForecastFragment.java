@@ -4,9 +4,12 @@ package com.malmonte.sunshine.app;
  * Created by malmonte on 4/27/16.
  */
 
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.Bundle;
+import android.preference.PreferenceManager;
 import android.support.annotation.Nullable;
 import android.support.v4.app.Fragment;
 import android.util.Log;
@@ -16,8 +19,10 @@ import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.ListView;
+import android.widget.Toast;
 
 import org.json.JSONArray;
 import org.json.JSONException;
@@ -57,18 +62,21 @@ public class ForecastFragment extends Fragment {
         View rootView = inflater.inflate(R.layout.fragment_main, container, false);
 
         ArrayList<String> weekForecast = new ArrayList<>();
-        weekForecast.add("Today - Sunny - 88/63");
-        weekForecast.add("Tomorrow - Foggy - 70/46");
-        weekForecast.add("Weds - Cloudy - 72/63");
-        weekForecast.add("Thurs - Rainy - 64/51");
-        weekForecast.add("Fri - Foggy - 70/46");
-        weekForecast.add("Sat - Sunny - 76/68");
         adapter = new ArrayAdapter<>(getActivity(),
                 R.layout.list_item_forecast,
                 R.id.list_item_forecast_textview,
                 weekForecast);
         ListView listView = (ListView) rootView.findViewById(R.id.listview_forecast);
         listView.setAdapter(adapter);
+        listView.setOnItemClickListener(new AdapterView.OnItemClickListener(){
+            @Override
+            public void onItemClick(AdapterView<?> parent, View view, int position, long id) {
+                String forecastDetail = adapter.getItem(position);
+                //Toast.makeText(getActivity(), adapter.getItem(position), Toast.LENGTH_LONG).show();
+                Intent intent = new Intent(getActivity(), DetailActivity.class).putExtra(Intent.EXTRA_TEXT, forecastDetail);
+                startActivity(intent);
+            }
+        });
 
         rootView.findViewById(R.id.action_refresh);
 
@@ -78,16 +86,31 @@ public class ForecastFragment extends Fragment {
     }
 
     @Override
+    public void onStart() {
+        super.onStart();
+        updateWeather();
+    }
+
+    private void updateWeather(){
+        SharedPreferences def = PreferenceManager.getDefaultSharedPreferences(getActivity());
+        String postcode = def.getString(getString(R.string.pref_location_key), getString(R.string.pref_default_display_name));
+        String temperature = def.getString(getString(R.string.pref_temperature_key), getString(R.string.pref_temperature_default));
+        Log.v(TAG, "Metric from sharedPreferences: " + temperature);
+        new FetchWeatherTask().execute(postcode, temperature);
+    }
+
+    @Override
     public void onCreateOptionsMenu(Menu menu, MenuInflater inflater) {
         inflater.inflate(R.menu.forecastfragment, menu);
     }
+
 
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
 
         int id = item.getItemId();
         if(id == R.id.action_refresh){
-            new FetchWeatherTask().execute("DistritoNacional,DO");
+            updateWeather();
             return true;
         }
         return super.onOptionsItemSelected(item);
@@ -98,11 +121,11 @@ public class ForecastFragment extends Fragment {
         private final String TAG = FetchWeatherTask.class.getSimpleName();
 
         @Override
-        protected String[] doInBackground(String... postcodes) {
+        protected String[] doInBackground(String... params) {
             // These two need to be declared outside the try/catch
             // so that they can be closed in the finally block.
 
-            if(postcodes.length == 0){
+            if(params.length == 0){
                 return null;
             }
             HttpURLConnection urlConnection = null;
@@ -122,9 +145,9 @@ public class ForecastFragment extends Fragment {
                         .appendPath("2.5")
                         .appendPath("forecast")
                         .appendPath("daily")
-                        .appendQueryParameter("q", postcodes[0])
+                        .appendQueryParameter("q", params[0])
                         .appendQueryParameter("mode", "json")
-                        .appendQueryParameter("units", "metric")
+                        .appendQueryParameter("units", params[1])
                         .appendQueryParameter("cnt", "7")
                         .appendQueryParameter("appid", "8c7c9e53d0f39a8593debfe74037d403");
                 String sURL = uriBuilder.build().toString();
